@@ -1,13 +1,10 @@
 const path = require('path');
 const webpack = require('webpack');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const CleanWebpackPlugin = require('clean-webpack-plugin');
+const {CleanWebpackPlugin} = require('clean-webpack-plugin');
 const ZipPlugin = require('zip-webpack-plugin');
 
 module.exports = {
-  node: {
-    fs: 'empty',
-  },
   context: path.join(__dirname, 'src'),
   entry: {
     module: './module.ts',
@@ -29,31 +26,32 @@ module.exports = {
     },
   ],
   plugins: [
-    new CleanWebpackPlugin('doitintl-bigquery-datasource/', {allowExternal: true}),
-    new CleanWebpackPlugin('doitintl-bigquery-datasource-*.zip', {allowExternal: true}),
-    new webpack.optimize.OccurrenceOrderPlugin(),
-    new CopyWebpackPlugin([
-      { from: 'plugin.json', to: '.' },
-      { from: '../README.md', to: '.' },
-      { from: '../LICENSE.md', to: '.' },
-      { from: 'img/*', to: '.' },
-      { from: 'partials/*', to: '.' },
-    ]),
-    new CopyWebpackPlugin([
-      { from: '../dist/', to: '../doitintl-bigquery-datasource/' },
-    ]),
-    // new ZipPlugin({
-    //   path: ''
-    // })
+    new CleanWebpackPlugin({cleanOnceBeforeBuildPatterns: ['bigquery-datasource/'], dangerouslyAllowCleanPatternsOutsideProject: true}),
+    new CleanWebpackPlugin({cleanOnceBeforeBuildPatterns: ['bigquery-datasource.zip'], dangerouslyAllowCleanPatternsOutsideProject: true}),
+    new CopyWebpackPlugin({
+      patterns : [
+        { from: 'plugin.json', to: '.' },
+        { from: '../README.md', to: '.' },
+        { from: '../LICENSE.md', to: '.' },
+        { from: 'img/*', to: '.' },
+        { from: 'partials/*', to: '.' },
+    ]}),
+    new ZipPlugin({
+      path: '',
+      filename: 'bigquery-datasource'
+    })
   ],
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.js'],
+    fallback: {
+      fs: false
+    }
   },
   module: {
     rules: [
       {
         test: /\.tsx?$/,
-        loaders: [
+        use: [
           {
             loader: 'babel-loader',
             options: { presets: ['env'] },

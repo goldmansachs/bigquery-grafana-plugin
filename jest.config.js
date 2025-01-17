@@ -5,6 +5,7 @@ module.exports = {
     '\\.(js|jsx)$': 'babel-jest',
     '\\.(ts|tsx)?$': 'ts-jest',
   },
+  testEnvironment: "jsdom",
   testRegex: '(\\.|/)([jt]est)\\.ts$',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   coverageDirectory: './coverage/',

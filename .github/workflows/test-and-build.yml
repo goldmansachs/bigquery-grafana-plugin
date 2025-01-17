@@ -1,0 +1,28 @@
+name: Run Tests and Build
+
+on: [push]
+
+jobs:
+  test_and_build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18' 
+
+      - name: NPM Install
+        run: npm install -S yarn --quiet --force
+
+      - name: Install dependancies
+        run: ./node_modules/yarn/bin/yarn install
+
+      - name: Run tests
+        run: ./node_modules/yarn/bin/yarn test
+
+      - name: Build project
+        run: ./node_modules/yarn/bin/yarn run build:prod

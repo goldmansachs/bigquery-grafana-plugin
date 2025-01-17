@@ -10,3 +10,10 @@ export interface IJwt {
   auth_provider_x509_cert_url: string;
   client_x509_cert_url: string;
 }
+
+declare global {
+  interface Window {
+    $: any;
+    MutationObserver: any;
+  }
+}

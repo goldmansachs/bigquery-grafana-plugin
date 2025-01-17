@@ -214,7 +214,7 @@ export default class ResponseParser {
     };
   }
 
-  private static _toVar(results) {
+  public static _toVar(results) {
     const res = [];
     for (const row of results.rows) {
       res.push(row.f[0].v);

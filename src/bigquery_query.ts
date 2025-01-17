@@ -545,6 +545,7 @@ export default class BigQueryQuery {
       return q;
     }
   }
+
   public replaceTimeFilters(q, options) {
     let fromD = options.range.from;
     let toD = options.range.to;

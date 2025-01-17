@@ -1,0 +1,58 @@
+name: Release the build asset
+
+on: 
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, eg: v1.0.0'
+        required: true
+     
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+ 
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18' 
+
+      - name: NPM Install
+        run: npm install -S yarn --quiet --force
+
+      - name: Install dependancies
+        run: ./node_modules/yarn/bin/yarn install
+
+      - name: Build project
+        run: ./node_modules/yarn/bin/yarn run build:prod
+
+      - name: Prepare zip
+        run: |
+          mkdir build
+          mv dist build/
+          zip -r build.zip build
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          release_name: Release ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
+
+      - name: Upload asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build.zip
+          asset_name: build.zip
+          asset_content_type: application/zip

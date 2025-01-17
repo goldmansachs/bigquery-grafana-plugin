@@ -46,6 +46,7 @@ export class BigQueryConfigCtrl {
     this.authenticationTypes = [
       { key: this.defaultAuthenticationType, value: 'Google JWT File' },
       { key: 'gce', value: 'GCE Default Service Account' },
+      { key: 'sso', value: 'SSO'}
     ];
     this.locations = [
       { text: 'United States (US)', value: 'US' },

@@ -9,14 +9,8 @@ export interface QueryMeta {
   sql: string;
 }
 
-const defaultQuery = `SELECT
-  time_column,
-  value1
-FROM
-  metric_table
-WHERE
-  $__timeFilter(time_column)
-`;
+const ONE_HOUR_IN_MILLIS = 3600000;
+const defaultQuery = 'SELECT `timestamp` time FROM `$__bqlProject.bql_playground.main` WHERE `timestamp` ' + `BETWEEN TIMESTAMP_MILLIS (${Date.now() - ONE_HOUR_IN_MILLIS}) AND TIMESTAMP_MILLIS (${Date.now()})`;
 
 export class BigQueryQueryCtrl extends QueryCtrl {
   public static templateUrl = 'partials/query.editor.html';
