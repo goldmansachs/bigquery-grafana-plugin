@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-
+	"time"
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/civil"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 // Converts an arbitrary bigquery.Value to a driver.Value
@@ -48,6 +49,8 @@ func ConvertColumnValue(v bigquery.Value, fieldSchema *bigquery.FieldSchema) (dr
 		return v.(bool), nil
 	case "TIME":
 		return bigquery.CivilTimeString(v.(civil.Time)), nil
+	case "TIMESTAMP":
+		return v.(time.Time), nil
 	case "DATE":
 		res := v.(civil.Date)
 		if !res.IsValid() {
@@ -64,6 +67,7 @@ func ConvertColumnValue(v bigquery.Value, fieldSchema *bigquery.FieldSchema) (dr
 	case "GEOGRAPHY":
 		return v.(string), nil
 	default:
+		log.DefaultLogger.Info("Unknown type", "type", fieldSchema.Type)
 		return v, nil
 	}
 }

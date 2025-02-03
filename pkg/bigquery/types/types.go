@@ -19,7 +19,7 @@ type BigQuerySettings struct {
 	AuthenticationType string `json:"authenticationType"`
 	PrivateKeyPath     string `json:"privateKeyPath"`
 	ServiceEndpoint    string `json:"serviceEndpoint"`
-
+	URL 			   string `json:"url"`
 	// Saved in secure JSON
 	PrivateKey string `json:"-"`
 }
@@ -31,6 +31,7 @@ type ConnectionSettings struct {
 	Dataset            string
 	Headers            map[string][]string
 	MaxBytesBilled     int64
+	URL 			   string
 }
 type TableFieldSchema struct {
 	Name        string       `json:"name"`

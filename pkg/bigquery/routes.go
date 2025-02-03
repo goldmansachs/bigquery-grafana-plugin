@@ -3,7 +3,6 @@ package bigquery
 import (
 	"net/http"
 
-	sdkUtils "github.com/grafana/grafana-google-sdk-go/pkg/utils"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 
 	"github.com/grafana/grafana-bigquery-datasource/pkg/bigquery/utils"
@@ -24,17 +23,8 @@ func (r *ResourceHandler) defaultProjects(rw http.ResponseWriter, req *http.Requ
 	if err != nil {
 		utils.SendResponse(nil, err, rw)
 	}
-
-	if s.AuthenticationType == "gce" {
-		if s.DefaultProject != "" {
-			utils.SendResponse(s.DefaultProject, nil, rw)
-			return
-		}
-		res, err := sdkUtils.GCEDefaultProject(req.Context(), BigQueryScope)
-		utils.SendResponse(res, err, rw)
-	} else {
-		utils.SendResponse(s.DefaultProject, nil, rw)
-	}
+	utils.SendResponse(s.DefaultProject, nil, rw)
+	
 }
 
 func (r *ResourceHandler) datasets(rw http.ResponseWriter, req *http.Request) {
@@ -47,7 +37,7 @@ func (r *ResourceHandler) datasets(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	res, err := r.ds.Datasets(req.Context(), result)
-
+	rw.Header().Set("Content-Type", "application/json")
 	utils.SendResponse(res, err, rw)
 }
 
@@ -59,7 +49,6 @@ func (r *ResourceHandler) tableSchema(rw http.ResponseWriter, req *http.Request)
 		utils.WriteResponse(rw, []byte(err.Error()))
 		return
 	}
-
 	res, err := r.ds.TableSchema(req.Context(), result)
 	rw.Header().Set("Content-Type", "application/json")
 	utils.SendResponse(res, err, rw)
@@ -74,7 +63,7 @@ func (r *ResourceHandler) validateQuery(rw http.ResponseWriter, req *http.Reques
 		return
 	}
 	result.Query.TimeRange = result.TimeRange
-
+	
 	res, err := r.ds.ValidateQuery(req.Context(), result)
 	utils.SendResponse(res, err, rw)
 }
@@ -87,7 +76,13 @@ func (r *ResourceHandler) projects(rw http.ResponseWriter, req *http.Request) {
 		utils.WriteResponse(rw, []byte(err.Error()))
 		return
 	}
-	res, err := r.ds.Projects(result)
+	res, err := r.ds.Projects(req, result)
+	if err!=nil{
+		rw.WriteHeader(http.StatusBadRequest)
+		utils.WriteResponse(rw, []byte(err.Error()))
+		return
+	}
+	rw.Header().Set("Content-Type", "application/json")
 	utils.SendResponse(res, err, rw)
 }
 

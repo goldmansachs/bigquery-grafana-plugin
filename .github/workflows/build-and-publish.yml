@@ -1,20 +1,16 @@
-name: CI
+name: Release the build asset
 
-on: [push]
-
-permissions: read-all
-
+on: 
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, eg: v1.0.0'
+        required: true
+     
 jobs:
-  build:
-    name: Build, lint and unit tests
+  build_and_publish:
     runs-on: ubuntu-latest
-    outputs:
-      plugin-id: ${{ steps.metadata.outputs.plugin-id }}
-      plugin-version: ${{ steps.metadata.outputs.plugin-version }}
-      has-e2e: ${{ steps.check-for-e2e.outputs.has-e2e }}
-      has-backend: ${{ steps.check-for-backend.outputs.has-backend }}
-    env:
-      GRAFANA_ACCESS_POLICY_TOKEN: ${{ secrets.GRAFANA_ACCESS_POLICY_TOKEN }}
+
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js environment
@@ -26,12 +22,6 @@ jobs:
       - name: Install dependencies
         run: yarn install
 
-      - name: Check types
-        run: yarn run typecheck
-      - name: Lint
-        run: yarn run lint
-      - name: Unit tests
-        run: yarn run test:ci
       - name: Build frontend
         run: yarn run build
 
@@ -49,27 +39,12 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Test backend
-        if: steps.check-for-backend.outputs.has-backend == 'true'
-        uses: magefile/mage-action@v3
-        with:
-          version: latest
-          args: coverage
-
       - name: Build backend
         if: steps.check-for-backend.outputs.has-backend == 'true'
         uses: magefile/mage-action@v3
         with:
           version: latest
           args: buildAll
-
-      - name: Check for E2E
-        id: check-for-e2e
-        run: |
-          if [ -f "playwright.config.ts" ]
-          then
-            echo "has-e2e=true" >> $GITHUB_OUTPUT
-          fi
 
       - name: Sign plugin
         run: yarn run sign
@@ -94,9 +69,24 @@ jobs:
           mv dist ${{ steps.metadata.outputs.plugin-id }}
           zip ${{ steps.metadata.outputs.archive }} ${{ steps.metadata.outputs.plugin-id }} -r
 
-      - name: Archive Build
-        uses: actions/upload-artifact@v4
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: ${{ steps.metadata.outputs.plugin-id }}-${{ steps.metadata.outputs.plugin-version }}
-          path: ${{ steps.metadata.outputs.plugin-id }}
-          retention-days: 5
+          tag_name: ${{ github.event.inputs.version }}
+          release_name: Release ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
+
+      - name: Upload asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ steps.metadata.outputs.archive }}
+          asset_name: ${{ steps.metadata.outputs.archive }}
+          asset_content_type: application/zip

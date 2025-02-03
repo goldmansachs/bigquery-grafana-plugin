@@ -278,7 +278,7 @@ export function convertToUtc(d: Date) {
 }
 
 export function applyQueryDefaults(q: BigQueryQueryNG, ds: BigQueryDatasource, apiClient?: BigQueryAPI) {
-  let editorMode = q.editorMode || EditorMode.Builder;
+  let editorMode = EditorMode.Code; // TODO: Fix it, Query Builder has been disabled as the page goes unresponsive with query builder
 
   // Switching to code editor if the query was created before visual query builder was introduced.
   if (q.editorMode === undefined && q.rawSql !== undefined) {

@@ -29,6 +29,7 @@ export interface BigQueryOptions extends DataSourceOptions {
   enableSecureSocksProxy?: boolean;
   MaxBytesBilled?: number;
   serviceEndpoint?: string;
+  url?: string;
 }
 
 export interface BigQuerySecureJsonData extends DataSourceSecureJsonData {}

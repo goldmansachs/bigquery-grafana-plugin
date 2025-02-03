@@ -101,8 +101,9 @@ export class BigQueryDatasource extends DataSourceWithBackend<BigQueryQueryNG, B
   }
 
   applyTemplateVariables(queryModel: BigQueryQueryNG, scopedVars: ScopedVars): QueryModel {
-    const interpolatedSql = getTemplateSrv().replace(queryModel.rawSql, scopedVars, interpolateVariable);
-
+    const interpolatedSql = getTemplateSrv()
+      .replace(queryModel.rawSql, scopedVars, interpolateVariable)
+      .replace('$__bqlProject', queryModel.project === undefined ? '' : queryModel.project);
     const result = {
       refId: queryModel.refId,
       hide: queryModel.hide,

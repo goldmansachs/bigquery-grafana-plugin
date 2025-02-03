@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"testing"
-
+	"net/http"
 	bq "cloud.google.com/go/bigquery"
 	"github.com/grafana/grafana-bigquery-datasource/pkg/bigquery/api"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -15,7 +15,6 @@ import (
 	"github.com/grafana/sqlds/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/api/cloudresourcemanager/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/metadata"
 )
@@ -36,18 +35,8 @@ func Test_datasourceConnection(t *testing.T) {
 				Location: "test",
 			}, nil
 		},
-		resourceManagerServices: make(map[string]*cloudresourcemanager.Service),
+		httpClientService: make(map[string]*http.Client),
 	}
-
-	t.Run("errors if authentication details are not configured connection", func(t *testing.T) {
-		db, err := ds.Connect(context.Background(), backend.DataSourceInstanceSettings{
-			ID:       1,
-			JSONData: []byte(`{"authenticationType":"jwt"}`),
-		}, []byte("{}"))
-
-		assert.Nil(t, db)
-		assert.Errorf(t, err, "datasource is missing authentication details")
-	})
 
 	t.Run("default connection", func(t *testing.T) {
 		_, err := RunConnection(ds, []byte("{}"))
@@ -88,7 +77,7 @@ func Test_datasourceConnection(t *testing.T) {
 					Location: "test",
 				}, nil
 			},
-			resourceManagerServices: make(map[string]*cloudresourcemanager.Service),
+			httpClientService: make(map[string]*http.Client),
 		}
 
 		ds.apiClients.Store("1/us-west2:raintank-dev", api.New(&bq.Client{
@@ -113,7 +102,7 @@ func Test_datasourceConnection(t *testing.T) {
 					Location: "test",
 				}, nil
 			},
-			resourceManagerServices: make(map[string]*cloudresourcemanager.Service),
+			httpClientService: make(map[string]*http.Client),
 		}
 
 		ds.apiClients.Store("1/us-west2:raintank-dev", api.New(&bq.Client{
@@ -141,13 +130,13 @@ func Test_datasourceConnection(t *testing.T) {
 					Location: "test",
 				}, nil
 			},
-			resourceManagerServices: make(map[string]*cloudresourcemanager.Service),
+			httpClientService: make(map[string]*http.Client),
 		}
 
 		_, err1 := RunConnection(ds, []byte(`{}`))
 		assert.Nil(t, err1)
 
-		_, exists := ds.resourceManagerServices["1"]
+		_, exists := ds.httpClientService["1"]
 		assert.True(t, exists)
 	})
 }

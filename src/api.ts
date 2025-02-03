@@ -130,7 +130,10 @@ class BigQueryAPIClient implements BigQueryAPI {
 
     const lastRawSql =
       this.lastValidation &&
-      getTemplateSrv().replace(this.lastValidation.query.rawSql, undefined, interpolateVariable).trim();
+      getTemplateSrv()
+        .replace(this.lastValidation.query.rawSql, undefined, interpolateVariable)
+        .trim()
+        .replace('$__bqlProject', this.defaultProject);
 
     if (this.lastValidation && rawSql === lastRawSql && query.location === this.lastValidation.query.location) {
       return this.lastValidation;

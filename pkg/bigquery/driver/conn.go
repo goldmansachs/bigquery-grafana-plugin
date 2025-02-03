@@ -205,7 +205,7 @@ func (c *Conn) Ping(ctx context.Context) (err error) {
 	job, err := q.Run(ctx)
 
 	if err != nil {
-		log.DefaultLogger.Info("Failed to connect with BigQuery")
+		log.DefaultLogger.Error("Failed to connect with BigQuery, error: ", err)
 		return
 	}
 

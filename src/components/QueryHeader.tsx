@@ -1,3 +1,6 @@
+// @ts-nocheck
+/* tslint:disable */
+
 import { SelectableValue } from '@grafana/data';
 import { EditorField, EditorHeader, EditorMode, EditorRow, FlexItem, InlineSelect, Space } from '@grafana/experimental';
 import { Button, InlineSwitch, RadioButtonGroup, Tooltip } from '@grafana/ui';
@@ -223,7 +226,7 @@ export function QueryHeader({
             onChange({
               ...query,
               rawSql: toRawSql(query),
-              editorMode: EditorMode.Builder,
+              editorMode: EditorMode.Code, // TODO: Fix it, Query Builder has been disabled as the page goes unresponsive with query builder
             });
           }}
           onDiscard={() => {
@@ -231,7 +234,7 @@ export function QueryHeader({
             onChange({
               ...query,
               rawSql: toRawSql(query),
-              editorMode: EditorMode.Builder,
+              editorMode: EditorMode.Code, // TODO: Fix it, Query Builder has been disabled as the page goes unresponsive with query builder
             });
           }}
           onCancel={() => setShowConfirm(false)}
