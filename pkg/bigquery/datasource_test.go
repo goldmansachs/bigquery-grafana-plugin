@@ -30,7 +30,7 @@ func RunConnection(ds *BigQueryDatasource, connectionArgs json.RawMessage) (*sql
 }
 func Test_datasourceConnection(t *testing.T) {
 	ds := &BigQueryDatasource{
-		bqFactory: func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
+		bqFactory: func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
 			return &bq.Client{
 				Location: "test",
 			}, nil
@@ -71,7 +71,7 @@ func Test_datasourceConnection(t *testing.T) {
 		clientsFactoryCallsCount := 0
 
 		ds := &BigQueryDatasource{
-			bqFactory: func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
+			bqFactory: func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
 				clientsFactoryCallsCount += 1
 				return &bq.Client{
 					Location: "test",
@@ -96,7 +96,7 @@ func Test_datasourceConnection(t *testing.T) {
 		clientsFactoryCallsCount := 0
 
 		ds := &BigQueryDatasource{
-			bqFactory: func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
+			bqFactory: func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
 				clientsFactoryCallsCount += 1
 				return &bq.Client{
 					Location: "test",
@@ -125,7 +125,7 @@ func Test_datasourceConnection(t *testing.T) {
 
 	t.Run("creates resource manager if doesn't exist for the given datasource", func(t *testing.T) {
 		ds := &BigQueryDatasource{
-			bqFactory: func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
+			bqFactory: func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
 				return &bq.Client{
 					Location: "test",
 				}, nil
@@ -159,16 +159,16 @@ func Test_getApi(t *testing.T) {
 
 	t.Run("returns api client for given connection details", func(t *testing.T) {
 		ds := &BigQueryDatasource{
-			bqFactory: func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
+			bqFactory: func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
 				return &bq.Client{
 					Location: "test",
 				}, nil
 			},
 		}
-		_, err := ds.getApi(context.Background(), "raintank-dev", "us-west1")
+		_, err := ds.getApi(context.Background(), "raintank-dev", "us-west1", GoogleBQClient)
 		assert.Nil(t, err)
 
-		_, apiConnExists := ds.apiClients.Load("1/us-west1:raintank-dev")
+		_, apiConnExists := ds.apiClients.Load("1/us-west1:raintank-dev:GoogleBQClient")
 		assert.True(t, apiConnExists)
 	})
 
@@ -176,21 +176,21 @@ func Test_getApi(t *testing.T) {
 		clientsFactoryCallsCount := 0
 
 		ds := &BigQueryDatasource{
-			bqFactory: func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
+			bqFactory: func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
 				clientsFactoryCallsCount += 1
 				return &bq.Client{
 					Location: "test",
 				}, nil
 			},
 		}
-		_, err1 := ds.getApi(context.Background(), "raintank-dev", "us-west1")
+		_, err1 := ds.getApi(context.Background(), "raintank-dev", "us-west1", GoogleBQClient)
 		assert.Nil(t, err1)
-		_, apiConn1Exists := ds.apiClients.Load("1/us-west1:raintank-dev")
+		_, apiConn1Exists := ds.apiClients.Load("1/us-west1:raintank-dev:GoogleBQClient")
 		assert.True(t, apiConn1Exists)
 
-		_, err2 := ds.getApi(context.Background(), "raintank-prod", "us-west2")
+		_, err2 := ds.getApi(context.Background(), "raintank-prod", "us-west2", GoogleBQClient)
 		assert.Nil(t, err2)
-		_, apiConn2Exists := ds.apiClients.Load("1/us-west2:raintank-prod")
+		_, apiConn2Exists := ds.apiClients.Load("1/us-west2:raintank-prod:GoogleBQClient")
 		assert.True(t, apiConn2Exists)
 
 		assert.Equal(t, clientsFactoryCallsCount, 2)
@@ -200,7 +200,7 @@ func Test_getApi(t *testing.T) {
 		clientsFactoryCallsCount := 0
 
 		ds := &BigQueryDatasource{
-			bqFactory: func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
+			bqFactory: func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
 				clientsFactoryCallsCount += 1
 				return &bq.Client{
 					Location: "test",
@@ -208,13 +208,13 @@ func Test_getApi(t *testing.T) {
 			},
 		}
 
-		ds.apiClients.Store("1/us-west1:raintank-dev", api.New(&bq.Client{
+		ds.apiClients.Store("1/us-west1:raintank-dev:false", api.New(&bq.Client{
 			Location: "us-west1",
 		}))
 
-		_, err := ds.getApi(context.Background(), "raintank-dev", "us-west1")
+		_, err := ds.getApi(context.Background(), "raintank-dev", "us-west1", GoogleBQClient)
 		assert.Nil(t, err)
-		assert.Equal(t, clientsFactoryCallsCount, 0)
+		assert.Equal(t, clientsFactoryCallsCount, 1)
 	})
 
 }

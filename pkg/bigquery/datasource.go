@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/grafana/sqlds/v3"
+	"io"
+	"net/http"
 	"strconv"
 	"sync"
-	"net/http"
-	"io/ioutil"
 
 	bq "cloud.google.com/go/bigquery"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -16,7 +17,6 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana-plugin-sdk-go/data/sqlutil"
-	"github.com/grafana/sqlds/v3"
 	"github.com/pkg/errors"
 	"google.golang.org/api/option"
 
@@ -32,15 +32,32 @@ type BigqueryDatasourceIface interface {
 	Datasets(ctx context.Context, args DatasetsArgs) ([]string, error)
 	TableSchema(ctx context.Context, args TableSchemaArgs) (*types.TableMetadataResponse, error)
 	ValidateQuery(ctx context.Context, args ValidateQueryArgs) (*api.ValidateQueryResponse, error)
-	Projects(request *http.Request, options ProjectsArgs) ([]string, error)
+	Projects(request *http.Request, options ProjectsArgs) ([]*Project, error)
 }
 
 type conn struct {
 	db     *sql.DB
 	driver *driver.Driver
 }
+type BQClientType int
 
-type bqServiceFactory func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error)
+const (
+   GoogleBQClient BQClientType = iota
+   CustomBQClient
+)
+
+func (c BQClientType) String() string {
+   switch c {
+   case GoogleBQClient:
+          return "GoogleBQClient"
+   case CustomBQClient:
+          return "CustomBQClient"
+   default:
+         return "Unknown"
+   }
+}
+
+type bqServiceFactory func(ctx context.Context, projectID string,clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error)
 
 type BigQueryDatasource struct {
 	connections             sync.Map
@@ -48,7 +65,9 @@ type BigQueryDatasource struct {
 	bqFactory               bqServiceFactory
 	httpClientService map[string]*http.Client
 	url string
+	customBQClientUrl string
 }
+
 
 type ConnectionArgs struct {
 	Dataset  string              `json:"dataset,omitempty"`
@@ -68,21 +87,29 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		return nil, fmt.Errorf("couldn't load connection settings: %w", err)
 	}
 	opts.Header.Add("Accept-Encoding", "")
-	client, err := newHTTPClient(connectionSettings, opts)
+	client, err := newHTTPClient(opts)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create http client")
 	}
-	
-	bqClient, err := bq.NewClient(ctx, connectionSettings.DefaultProject, option.WithHTTPClient(client), option.WithEndpoint(connectionSettings.URL))
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to create BigQuery client")
-	}
 
-	bqService := bqServiceFactory(func(ctx context.Context, projectID string, opts ...option.ClientOption) (*bq.Client, error) {
-		return bqClient, err
+	bqService := bqServiceFactory(func(ctx context.Context, projectID string, clientType BQClientType, opts ...option.ClientOption) (*bq.Client, error) {
+	    googleBQClient, err := bq.NewClient(ctx, projectID, option.WithHTTPClient(client), option.WithEndpoint(connectionSettings.URL))
+	    if err != nil {
+	       return nil, errors.WithMessage(err, "Failed to create BigQuery Client.")
+	    }
+        customBQClient, err := bq.NewClient(ctx, projectID, option.WithHTTPClient(client), option.WithEndpoint(connectionSettings.CustomBQClientURL))
+	    if err != nil {
+	      return nil, errors.WithMessage(err, "Failed to create BigQuery custom client")
+	    }
+        if clientType == CustomBQClient{
+         return customBQClient, err
+        } else{
+         return googleBQClient, err
+        }
 	})
-	m:= make(map[string]*http.Client)
+    m:= make(map[string]*http.Client)
 	m[fmt.Sprintf("%d",settings.ID)] = client
+
 	s := &BigQueryDatasource{
 		bqFactory:  bqService,
 		httpClientService: m,
@@ -105,7 +132,7 @@ func (s *BigQueryDatasource) Connect(ctx context.Context, config backend.DataSou
 		return nil, err
 	}
 	s.url = settings.URL
-
+    s.customBQClientUrl = settings.CustomBQClientURL
 	args, err := parseConnectionArgs(queryArgs)
 	if err != nil {
 		return nil, err
@@ -145,7 +172,7 @@ func (s *BigQueryDatasource) Connect(ctx context.Context, config backend.DataSou
 		}
 		s.connections.Store(connectionKey, conn{db: db, driver: dr})
 		if s.httpClientService[fmt.Sprintf("%d", config.ID)] == nil{
-			client, err := newHTTPClient(settings, opts)
+			client, err := newHTTPClient(opts)
 			if err != nil {
 				return nil, errors.WithMessage(err, "Failed to create http client")
 			}
@@ -153,12 +180,12 @@ func (s *BigQueryDatasource) Connect(ctx context.Context, config backend.DataSou
 		}
 		return db, nil
 	} else {
-		client, err := newHTTPClient(settings, opts)
+		client, err := newHTTPClient(opts)
 		if err != nil {
 			return nil, errors.WithMessage(err, "Failed to create http client")
 		}
 
-		bqClient, err := s.bqFactory(ctx, connectionSettings.Project, option.WithHTTPClient(client), option.WithEndpoint(settings.URL))
+		bqClient, err := s.bqFactory(ctx, connectionSettings.Project, GoogleBQClient, option.WithHTTPClient(client))
 		if err != nil {
 			return nil, errors.WithMessage(err, "Failed to create BigQuery client")
 		}
@@ -210,7 +237,7 @@ type DatasetsArgs struct {
 }
 
 func (s *BigQueryDatasource) Datasets(ctx context.Context, options DatasetsArgs) ([]string, error) {
-	apiClient, err := s.getApi(ctx, options.Project, options.Location)
+	apiClient, err := s.getApi(ctx, options.Project, options.Location, CustomBQClient)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to retrieve BigQuery API client")
 	}
@@ -241,7 +268,7 @@ func (s *BigQueryDatasource) Tables(ctx context.Context, options sqlds.Options) 
 		return nil, errors.New("project and dataset must be specified")
 	}
 
-	apiClient, err := s.getApi(ctx, args.Project, args.Location)
+	apiClient, err := s.getApi(ctx, args.Project, args.Location, CustomBQClient)
 
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to retrieve BigQuery API client")
@@ -263,7 +290,7 @@ func (s *BigQueryDatasource) Columns(ctx context.Context, options sqlds.Options)
 		return nil, errors.New("missing required arguments")
 	}
 
-	apiClient, err := s.getApi(ctx, args.Project, args.Location)
+	apiClient, err := s.getApi(ctx, args.Project, args.Location, GoogleBQClient)
 
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to retrieve BigQuery API client")
@@ -284,41 +311,48 @@ type ProjectsArgs struct {
 }
 
 type Project struct {
-	ProjectId   string `json:"id"`
+    DisplayName string `json:"displayName"`
+	ProjectID   string `json:"projectId"`
 }
 
-type BQProjects struct {
-	Projects []Project `json:"projects"`
-}
-
-func (s *BigQueryDatasource) Projects(request *http.Request, options ProjectsArgs) ([]string, error) {
-	client := s.httpClientService[options.DatasourceID]
-	req, err := http.NewRequestWithContext(request.Context(), "GET", fmt.Sprintf("%sprojects",s.url), nil)
-	if err != nil {
-		return nil, fmt.Errorf("can't format request: %v", err)
-	}
-	req.Header.Add("Authorization", request.Header.Get("Authorization"))
-	req.Header.Add("Accept-Encoding", "")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("client error: %v", err)
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("could not read body: %v", err)
-	}
-	var projectList BQProjects
-	err = json.Unmarshal(body, &projectList)
-	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal body: %v", err)
-	}
-	var projectNames []string
-	for _, proj := range projectList.Projects {
-		projectNames = append(projectNames, proj.ProjectId)
-	}
-	fmt.Println(projectNames)
-	return projectNames, nil
+func (s *BigQueryDatasource) Projects(request *http.Request, options ProjectsArgs) ([]*Project, error) {
+	 ctx := request.Context()
+	 client, exists := s.httpClientService[options.DatasourceID]
+	 if !exists {
+	    return nil, fmt.Errorf("no HTTP client found for datasource ID: %s", options.DatasourceID)
+	 }
+     newReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%sprojects",s.customBQClientUrl), nil)
+     if err !=nil {
+         return nil, fmt.Errorf("failed to create request: %w", err)
+     }
+     newReq.Header.Add("Authorization", request.Header.Get("Authorization"))
+     newReq.Header.Add("Accept-Encoding","")
+     resp, err := client.Do(newReq)
+     if err !=nil {
+         return nil, fmt.Errorf("failed to fetch projects:%w", err)
+     }
+     defer resp.Body.Close()
+     if resp.StatusCode != http.StatusOK {
+        return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+     }
+     bodyBytes, err := io.ReadAll(resp.Body)
+     if err !=nil {
+        return nil, fmt.Errorf("failed to read response body: %w",err)
+     }
+     var projects []Project
+     err = json.Unmarshal(bodyBytes, &projects)
+     if err!= nil {
+        fmt.Println("Error parsing JSON:",err)
+        return nil, fmt.Errorf("failed to parse reponse body in project array %w", err)
+     }
+     projectPointers := make([]*Project, 0,len(projects))
+     for _,project := range projects {
+            projectPointers = append(projectPointers, &Project{
+                 ProjectID:project.ProjectID,
+                 DisplayName:project.DisplayName,
+            })
+     }
+     return projectPointers, nil
 }
 
 type ValidateQueryArgs struct {
@@ -329,7 +363,7 @@ type ValidateQueryArgs struct {
 }
 
 func (s *BigQueryDatasource) ValidateQuery(ctx context.Context, options ValidateQueryArgs) (*api.ValidateQueryResponse, error) {
-	apiClient, err := s.getApi(ctx, options.Project, options.Location)
+	apiClient, err := s.getApi(ctx, options.Project, options.Location, GoogleBQClient)
 
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to retrieve BigQuery API client")
@@ -356,7 +390,7 @@ type TableSchemaArgs struct {
 }
 
 func (s *BigQueryDatasource) TableSchema(ctx context.Context, args TableSchemaArgs) (*types.TableMetadataResponse, error) {
-	apiClient, err := s.getApi(ctx, args.Project, args.Location)
+	apiClient, err := s.getApi(ctx, args.Project, args.Location, GoogleBQClient)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to retrieve BigQuery API client")
 	}
@@ -364,22 +398,15 @@ func (s *BigQueryDatasource) TableSchema(ctx context.Context, args TableSchemaAr
 	return apiClient.GetTableSchema(ctx, args.Dataset, args.Table)
 }
 
-func (s *BigQueryDatasource) getApi(ctx context.Context, project, location string) (*api.API, error) {
+func (s *BigQueryDatasource) getApi(ctx context.Context, project, location string, clientType BQClientType) (*api.API, error) {
 	datasourceSettings := getDatasourceSettings(ctx)
-	connectionKey := fmt.Sprintf("%d/%s:%s", datasourceSettings.ID, location, project)
+	connectionKey := fmt.Sprintf("%d/%s:%s:%s", datasourceSettings.ID, location, project, clientType.String())
 	cClient, exists := s.apiClients.Load(connectionKey)
 
 	if exists {
 		log.DefaultLogger.Debug("Reusing existing BigQuery API client")
 		return cClient.(*api.API), nil
 	}
-
-	settings, err := loadSettings(datasourceSettings)
-	if err != nil {
-		return nil, err
-	}
-
-	s.url = settings.URL
 
 	httpOptions, err := datasourceSettings.HTTPClientOptions(ctx)
 	if err != nil {
@@ -389,20 +416,20 @@ func (s *BigQueryDatasource) getApi(ctx context.Context, project, location strin
 	httpOptions.ForwardHTTPHeaders = true
 	httpOptions.Header.Add("Accept-Encoding", "")
 
-	httpClient, err := newHTTPClient(settings, httpOptions)
+	httpClient, err := newHTTPClient(httpOptions)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to crate http client")
 	}
 
-	client, err := s.bqFactory(ctx, project, option.WithHTTPClient(httpClient), option.WithEndpoint(settings.URL))
+	client, err := s.bqFactory(ctx, project, clientType, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to initialize BigQuery client")
 	}
 	apiInstance := api.New(client)
 
-	apiInstance.SetLocation(location)
-
 	s.apiClients.Store(connectionKey, apiInstance)
+
+	apiInstance.SetLocation(location)
 
 	return apiInstance, nil
 

@@ -226,7 +226,7 @@ export function QueryHeader({
             onChange({
               ...query,
               rawSql: toRawSql(query),
-              editorMode: EditorMode.Code, // TODO: Fix it, Query Builder has been disabled as the page goes unresponsive with query builder
+              editorMode: EditorMode.Builder, // TODO: Fix it, Query Builder has been disabled as the page goes unresponsive with query builder
             });
           }}
           onDiscard={() => {
@@ -234,7 +234,7 @@ export function QueryHeader({
             onChange({
               ...query,
               rawSql: toRawSql(query),
-              editorMode: EditorMode.Code, // TODO: Fix it, Query Builder has been disabled as the page goes unresponsive with query builder
+              editorMode: EditorMode.Builder, // TODO: Fix it, Query Builder has been disabled as the page goes unresponsive with query builder
             });
           }}
           onCancel={() => setShowConfirm(false)}

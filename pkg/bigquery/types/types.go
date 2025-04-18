@@ -20,6 +20,7 @@ type BigQuerySettings struct {
 	PrivateKeyPath     string `json:"privateKeyPath"`
 	ServiceEndpoint    string `json:"serviceEndpoint"`
 	URL 			   string `json:"url"`
+	CustomBQClientURL  string `json:"customBQClientURL"`
 	// Saved in secure JSON
 	PrivateKey string `json:"-"`
 }
