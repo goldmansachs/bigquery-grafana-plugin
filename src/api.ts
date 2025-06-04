@@ -126,7 +126,8 @@ class BigQueryAPIClient implements BigQueryAPI {
         },
         interpolateVariable
       )
-      .trim();
+      .trim()
+      .replace('$__bqlProject', this.defaultProject);
 
     const lastRawSql =
       this.lastValidation &&
